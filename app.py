@@ -1,20 +1,28 @@
 import streamlit as st
 import google.generativeai as genai
 
-# الربط المباشر والواضح
-st.title("🧪 فحص محرك البينة")
+st.title("🧪 فحص محرك البينة (المسار المستقر)")
 
-if "GOOGLE_API_KEY" in st.secrets:
-    api_key = st.secrets["GOOGLE_API_KEY"]
-    genai.configure(api_key=api_key)
-    
+# جلب المفتاح من Secrets
+api_key = st.secrets.get("GOOGLE_API_KEY")
+
+if api_key:
     try:
-        # محاولة الاتصال بأبسط موديل
+        # الحل السحري: إجبار المكتبة على تجاهل v1beta واستخدام البروتوكول المستقر
+        genai.configure(api_key=api_key, transport='rest')
+        
+        # استدعاء الموديل بالاسم القصير لتفادي خلط المسارات
         model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        # تجربة الاتصال
         response = model.generate_content("سلام")
-        st.success("🟢 الـ AI خدام!")
-        st.write("الرد:", response.text)
+        
+        st.success("🟢 البولة خضراء: المحرك شغال بنجاح!")
+        st.write("الرد من المحرك:", response.text)
+        
     except Exception as e:
-        st.error(f"🔴 الـ AI محبوس بسباب: {e}")
+        # إذا استمر الخطأ، سنعرضه بدقة للتشخيص
+        st.error(f"🔴 فشل الاتصال: {e}")
+        st.info("💡 إذا ظهر خطأ 404، جرب كتابة 'gemini-pro' بدلاً من 'gemini-1.5-flash' في الكود.")
 else:
-    st.warning("⚪ السيرفر ما شايفش المفتاح (Secrets خاوية)")
+    st.error("❌ المفتاح غير موجود في Settings (Secrets)")
