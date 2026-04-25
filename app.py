@@ -1,14 +1,12 @@
 import streamlit as st
 import google.generativeai as genai
-from PyPDF2 import PdfReader
 import os
 
-# إعدادات المختبر
-st.set_page_config(page_title="مختبر البينة - Chat System", layout="wide")
+st.set_page_config(page_title="مختبر محلل البينة", layout="wide")
 
-# 1. نظام الحماية (123456)
+# 1. نظام الحماية الثابت
 if "password_correct" not in st.session_state:
-    st.title("🔒 الدخول للمختبر")
+    st.title("🔒 دخول المختبر")
     pwd = st.text_input("كود المختبر", type="password")
     if st.button("فتح"):
         if pwd == st.secrets["MY_PASSWORD"]:
@@ -16,71 +14,70 @@ if "password_correct" not in st.session_state:
             st.rerun()
     st.stop()
 
-# 2. تحميل البيانات المرجعية تلقائياً
+# 2. تحميل ملف الـ txt تلقائياً
 @st.cache_resource
 def load_data():
-    if os.path.exists("quran.pdf"):
-        reader = PdfReader("quran.pdf")
-        return "".join([p.extract_text() for p in reader.pages if p.extract_text()])
+    file_path = "quran.txt"
+    if os.path.exists(file_path):
+        with open(file_path, "r", encoding="utf-8") as f:
+            return f.read()
     return None
 
 full_text = load_data()
 
-# 3. إدارة حالة الشات والوكلاء
+# 3. إدارة الذاكرة (لتحويل البيانات بين الوكلاء)
 if "messages" not in st.session_state: st.session_state.messages = []
-if "shared_data" not in st.session_state: st.session_state.shared_data = ""
+if "shared_context" not in st.session_state: st.session_state.shared_context = ""
+if "fixed_rules" not in st.session_state: st.session_state.fixed_rules = ""
 
-# القائمة الجانبية للتحكم
+# 4. تعريف الوكلاء (هنا يمكنك إضافة أي وكيل جديد بسهولة)
+agents_registry = {
+    "وكيل الجمع 📚": "مهمتك استخراج وجمع كل الآيات المتشابهة أو الكلمات المرتبطة بالطلب. لا تفسير، لا وعظ، فقط اجمع البينة المادية.",
+    "وكيل التحليل المنطقي 🔬": "وظيفتك نقد النصوص بالمنطق المادي (سبب ونتيجة). يمنع الحشو والخيال. اعتمد فقط على المكتوب.",
+    "وكيل النقد الصارم ⚖️": "أنت المحقق الصارم. ابحث عن الثغرات المنطقية، التناقضات الظاهرية، واختبر اتساق النص بأقصى درجات القسوة المنطقية.",
+    "وكيل القواعد 🧩": "مهمتك تثبيت القواعد المستخرجة من التحليلات السابقة وفحص صحة الملاحظات بناءً على البينة."
+}
+
 st.sidebar.title("🤖 غرفة التحكم")
-agent_choice = st.sidebar.selectbox(
-    "اختر الوكيل النشط:",
-    ["وكيل الجمع 📚", "وكيل التحليل المنطقي 🔬", "وكيل الملاحظات والقواعد 🧩"]
-)
+agent_choice = st.sidebar.selectbox("اختر الوكيل النشط:", list(agents_registry.keys()))
 
-# تحديد بروتوكول الوكيل
-if agent_choice == "وكيل الجمع 📚":
-    instr = "أنت وكيل الجمع. وظيفتك استخراج الآيات المتشابهة بدقة مادية من النص. لا تفسر، فقط اجمع."
-elif agent_choice == "وكيل التحليل المنطقي 🔬":
-    instr = "أنت وكيل التحليل. وظيفتك نقد النصوص بالمنطق والسبب والنتيجة بدون حشو أو خيال."
-else:
-    instr = "أنت وكيل القواعد. وظيفتك تثبيت القواعد المستخرجة وفحص صحة الملاحظات بناءً على الكتاب."
+# إعداد البروتوكول
+system_p = agents_registry[agent_choice]
+if st.session_state.fixed_rules:
+    system_p += f"\n⚠️ قواعد العمل المثبتة: {st.session_state.fixed_rules}"
 
 genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-model = genai.GenerativeModel('gemini-1.5-pro', system_instruction=instr)
+model = genai.GenerativeModel('gemini-1.5-pro', system_instruction=system_p)
 
-# 4. واجهة الشات
+# 5. واجهة الشات
 st.title(f"💬 {agent_choice}")
+if not full_text: st.error("❌ يرجى التأكد من وجود ملف quran.txt في GitHub.")
 
-# عرض الرسائل السابقة
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+# عرض المحادثة
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
-# إدخال الشات
+# إدخال المستخدم
 if prompt := st.chat_input("تحدث مع الوكيل..."):
-    # إذا كان هناك بيانات مشتركة من وكيل آخر، نضيفها للطلب
-    input_text = f"سياق مشترك: {st.session_state.shared_data}\n\nسؤال المستخدم: {prompt}" if st.session_state.shared_data else prompt
-    
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+    with st.chat_message("user"): st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        response = model.generate_content(f"النص المرجعي:\n{full_text}\n\nالطلب:\n{input_text}")
+        # دمج السياق المحول من وكيل آخر
+        context_input = f"سياق محول: {st.session_state.shared_context}\n\nالطلب: {prompt}" if st.session_state.shared_context else prompt
+        
+        response = model.generate_content(f"النص المرجعي:\n{full_text}\n\n{context_input}")
         st.markdown(response.text)
         st.session_state.messages.append({"role": "assistant", "content": response.text})
         
-        # أزرار التحويل بين الوكلاء
-        col1, col2 = st.columns(2)
-        if col1.button("📤 تحويل النتيجة لوكيل التحليل"):
-            st.session_state.shared_data = response.text
-            st.success("تم تمرير البيانات لوكيل التحليل.")
-        if col2.button("🧩 حفظ كقاعدة تحليل"):
-            st.session_state.shared_data = response.text
-            st.info("تم تثبيت هذه النتيجة كقاعدة للوكلاء الآخرين.")
-
-# زر لمسح الشات والبدء من جديد
-if st.sidebar.button("🗑️ مسح الجلسة"):
-    st.session_state.messages = []
-    st.session_state.shared_data = ""
-    st.rerun()
+        # أزرار التحويل والتحكم
+        col1, col2, col3 = st.columns(3)
+        if col1.button("📤 تحويل للوكلاء"):
+            st.session_state.shared_context = response.text
+            st.toast("تم نسخ النتيجة لتحويلها لوكيل آخر")
+        if col2.button("🧩 تثبيت كقاعدة"):
+            st.session_state.fixed_rules += f"\n- {response.text}"
+            st.toast("تمت إضافة النتيجة لقواعد المختبر")
+        if col3.button("🗑️ مسح الشات"):
+            st.session_state.messages = []
+            st.rerun()
