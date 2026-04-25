@@ -1,75 +1,86 @@
 import streamlit as st
 import google.generativeai as genai
 from PyPDF2 import PdfReader
+import os
 
-# 1. إعدادات الصفحة والجمالية
-st.set_page_config(page_title="مختبر محلل البينة", page_icon="🔬", layout="wide")
+# إعدادات المختبر
+st.set_page_config(page_title="مختبر البينة - Chat System", layout="wide")
 
-# تخصيص المظهر بالـ CSS
-st.markdown("""
-    <style>
-    .main { background-color: #0e1117; }
-    .stButton>button { width: 100%; border-radius: 5px; height: 3em; background-color: #ff4b4b; color: white; }
-    .stTextInput>div>div>input { color: #262730; }
-    </style>
-    """, unsafe_allow_html=True)
-
-# 2. نظام الحماية
+# 1. نظام الحماية (123456)
 if "password_correct" not in st.session_state:
-    st.title("🔒 دخول المصرح لهم فقط")
-    pwd = st.text_input("كود المختبر (Password)", type="password")
-    if st.button("فتح البوابة"):
+    st.title("🔒 الدخول للمختبر")
+    pwd = st.text_input("كود المختبر", type="password")
+    if st.button("فتح"):
         if pwd == st.secrets["MY_PASSWORD"]:
             st.session_state["password_correct"] = True
             st.rerun()
-        else:
-            st.error("⚠️ كود خاطئ. الدخول ممنوع.")
     st.stop()
 
-# 3. إعدادات الوكلاء (Agents)
-st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2103/2103633.png", width=100)
-st.sidebar.title("🤖 غرفة التحكم بالوكلاء")
+# 2. تحميل البيانات المرجعية تلقائياً
+@st.cache_resource
+def load_data():
+    if os.path.exists("quran.pdf"):
+        reader = PdfReader("quran.pdf")
+        return "".join([p.extract_text() for p in reader.pages if p.extract_text()])
+    return None
 
-agent_type = st.sidebar.selectbox(
-    "اختر الوكيل المتخصص:",
-    ["وكيل فحص التناقضات ⚖️", "وكيل الاستدلال المادي 🔎", "وكيل نقد المتون 🧩"]
+full_text = load_data()
+
+# 3. إدارة حالة الشات والوكلاء
+if "messages" not in st.session_state: st.session_state.messages = []
+if "shared_data" not in st.session_state: st.session_state.shared_data = ""
+
+# القائمة الجانبية للتحكم
+st.sidebar.title("🤖 غرفة التحكم")
+agent_choice = st.sidebar.selectbox(
+    "اختر الوكيل النشط:",
+    ["وكيل الجمع 📚", "وكيل التحليل المنطقي 🔬", "وكيل الملاحظات والقواعد 🧩"]
 )
 
-# تحديد بروتوكول الوكيل المختار
-if agent_type == "وكيل فحص التناقضات ⚖️":
-    instruction = "أنت وكيل متخصص في كشف التناقضات. مهمتك مقارنة النصوص ببعضها واستخراج أي تضارب منطقي مادي."
-elif agent_type == "وكيل الاستدلال المادي 🔎":
-    instruction = "أنت وكيل مادي. تركز فقط على الأرقام، الأماكن، الزمان، والأدلة الحسية المذكورة في النص."
+# تحديد بروتوكول الوكيل
+if agent_choice == "وكيل الجمع 📚":
+    instr = "أنت وكيل الجمع. وظيفتك استخراج الآيات المتشابهة بدقة مادية من النص. لا تفسر، فقط اجمع."
+elif agent_choice == "وكيل التحليل المنطقي 🔬":
+    instr = "أنت وكيل التحليل. وظيفتك نقد النصوص بالمنطق والسبب والنتيجة بدون حشو أو خيال."
 else:
-    instruction = "أنت وكيل نقد المتون. تفحص النص بناءً على قواعد المنطق الصارم والسبب والنتيجة."
+    instr = "أنت وكيل القواعد. وظيفتك تثبيت القواعد المستخرجة وفحص صحة الملاحظات بناءً على الكتاب."
 
-# 4. تشغيل المحرك
 genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-model = genai.GenerativeModel(model_name='gemini-1.5-pro', system_instruction=instruction)
+model = genai.GenerativeModel('gemini-1.5-pro', system_instruction=instr)
 
-# 5. الواجهة الرئيسية
-st.title("🔬 مختبر محلل البينة - التحليل المادي")
-st.info(f"🟢 الوكيل النشط حالياً: {agent_type}")
+# 4. واجهة الشات
+st.title(f"💬 {agent_choice}")
 
-uploaded_file = st.file_uploader("📥 ارفع المادة الخام للتحليل (PDF)", type="pdf")
+# عرض الرسائل السابقة
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-if uploaded_file:
-    with st.status("⏳ جاري سحب البيانات من الملف..."):
-        reader = PdfReader(uploaded_file)
-        full_text = "".join([page.extract_text() for page in reader.pages if page.extract_text()])
-        st.write(f"✅ تم سحب {len(reader.pages)} صفحة.")
+# إدخال الشات
+if prompt := st.chat_input("تحدث مع الوكيل..."):
+    # إذا كان هناك بيانات مشتركة من وكيل آخر، نضيفها للطلب
+    input_text = f"سياق مشترك: {st.session_state.shared_data}\n\nسؤال المستخدم: {prompt}" if st.session_state.shared_data else prompt
+    
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
-    st.markdown("---")
-    query = st.text_area("💬 ما هي المهمة المطلوبة من الوكيل؟", placeholder="مثال: هل هناك تناقض بين ما ورد في المقدمة وما ورد في الخاتمة؟")
+    with st.chat_message("assistant"):
+        response = model.generate_content(f"النص المرجعي:\n{full_text}\n\nالطلب:\n{input_text}")
+        st.markdown(response.text)
+        st.session_state.messages.append({"role": "assistant", "content": response.text})
+        
+        # أزرار التحويل بين الوكلاء
+        col1, col2 = st.columns(2)
+        if col1.button("📤 تحويل النتيجة لوكيل التحليل"):
+            st.session_state.shared_data = response.text
+            st.success("تم تمرير البيانات لوكيل التحليل.")
+        if col2.button("🧩 حفظ كقاعدة تحليل"):
+            st.session_state.shared_data = response.text
+            st.info("تم تثبيت هذه النتيجة كقاعدة للوكلاء الآخرين.")
 
-    if st.button("🚀 بدء التشغيل"):
-        if query:
-            with st.spinner("🧠 الوكيل يقوم بمعالجة البيانات..."):
-                response = model.generate_content(f"بناءً على البينة التالية:\n{full_text}\n\nأجب على التالي بالمنطق المادي: {query}")
-                st.subheader("📝 تقرير الوكيل النهائي:")
-                st.markdown(response.text)
-                
-                # إضافة زر لتحميل التقرير
-                st.download_button("📥 تحميل التقرير", response.text, file_name="analysis_report.txt")
-        else:
-            st.warning("⚠️ يرجى تزويد الوكيل بمهمة محددة.")
+# زر لمسح الشات والبدء من جديد
+if st.sidebar.button("🗑️ مسح الجلسة"):
+    st.session_state.messages = []
+    st.session_state.shared_data = ""
+    st.rerun()
