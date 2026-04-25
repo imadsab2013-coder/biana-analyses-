@@ -1,28 +1,35 @@
 import streamlit as st
-import google.generativeai as genai
+import requests
 
-st.title("🔬 مختبر البينة (الربط المباشر)")
+st.title("🔬 مختبر البينة (Qwen 2.5)")
 
-# 1. جلب المفتاح
-api_key = st.secrets.get("GOOGLE_API_KEY")
+# جلب المفتاح من Secrets
+api_key = st.secrets.get("OPENROUTER_API_KEY")
 
 if api_key:
     try:
-        # إعداد بسيط وقوي
-        genai.configure(api_key=api_key)
+        # محاولة تواصل بسيطة مع Qwen
+        response = requests.post(
+            url="https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "alibaba/qwen-2.5-72b-instruct",
+                "messages": [{"role": "user", "content": "سلام"}]
+            }
+        )
         
-        # استخدام اسم الموديل بدون أي إضافات (هذا المسار هو الأكثر استقراراً)
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        
-        # محاولة توليد محتوى بسيط جداً
-        response = model.generate_content("سلام")
-        
-        st.success("🟢 اشتغل! البينة ظهرت")
-        st.write("رد الـ AI:", response.text)
-        
+        if response.status_code == 200:
+            res_text = response.json()['choices'][0]['message']['content']
+            st.success("🟢 اشتعل! البينة ظهرت")
+            st.write("رد Qwen:", res_text)
+        else:
+            st.error(f"🔴 خطأ في المحرك: {response.status_code}")
+            st.write(response.text)
+
     except Exception as e:
-        # إذا استمر المشكل، سنغير "الموديل" نفسه داخل الكود
         st.error(f"🔴 عطل مادي: {e}")
-        st.info("💡 جرب تبدل 'gemini-1.5-flash' بـ 'gemini-pro' في الكود إذا بقى الـ 404.")
 else:
     st.error("❌ المفتاح غير موجود في السكرت (Secrets)")
