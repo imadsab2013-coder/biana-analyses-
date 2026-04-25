@@ -15,8 +15,9 @@ if api_key:
             "Content-Type": "application/json"
         }
         
+        # جرب هاد الموديل qwen-2.5-72b هو الأقوى حالياً
         payload = {
-            "model": "qwen/qwen-2-7b-instruct:free",
+            "model": "alibaba/qwen-2.5-72b-instruct:free",
             "messages": [{"role": "user", "content": user_input}]
         }
         
@@ -26,8 +27,9 @@ if api_key:
                 answer = response.json()['choices'][0]['message']['content']
                 st.chat_message("assistant").write(answer)
             else:
-                st.error(f"عطل في المحرك: {response.text}")
+                st.error(f"عطل 404: تأكد من اسم الموديل فـ OpenRouter")
+                st.write(response.text) # هادي غتورينا اشنو المشكل بالظبط
         except Exception as e:
             st.error(f"خطأ مادي: {e}")
 else:
-    st.warning("أدخل الساروت في Secrets")
+    st.warning("أدخل الساروت فـ Secrets")
