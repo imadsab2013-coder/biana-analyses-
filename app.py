@@ -1,35 +1,38 @@
 import streamlit as st
 import requests
 
+st.set_page_config(page_title="مختبر البينة", layout="centered")
 st.title("🔬 مختبر البينة (Qwen 2.5)")
 
-# جلب المفتاح من Secrets
-api_key = st.secrets.get("OPENROUTER_API_KEY")
+# جلب المفتاح بشكل آمن وتصفيته من أي فراغات
+api_key = st.secrets.get("OPENROUTER_API_KEY", "").strip()
 
 if api_key:
-    try:
-        # محاولة تواصل بسيطة مع Qwen
-        response = requests.post(
-            url="https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "alibaba/qwen-2.5-72b-instruct",
-                "messages": [{"role": "user", "content": "سلام"}]
-            }
-        )
+    # واجهة بسيطة للتحدث مع Qwen
+    user_input = st.chat_input("حلل بالمنطق الصيني...")
+    
+    if user_input:
+        st.chat_message("user").write(user_input)
         
-        if response.status_code == 200:
-            res_text = response.json()['choices'][0]['message']['content']
-            st.success("🟢 اشتعل! البينة ظهرت")
-            st.write("رد Qwen:", res_text)
-        else:
-            st.error(f"🔴 خطأ في المحرك: {response.status_code}")
-            st.write(response.text)
-
-    except Exception as e:
-        st.error(f"🔴 عطل مادي: {e}")
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "model": "alibaba/qwen-2-7b-instruct:free",
+            "messages": [{"role": "user", "content": user_input}]
+        }
+        
+        with st.spinner("جاري استحضار البينة..."):
+            try:
+                response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=data)
+                if response.status_code == 200:
+                    result = response.json()['choices'][0]['message']['content']
+                    st.chat_message("assistant").write(result)
+                else:
+                    st.error(f"🔴 عطل في المحرك: {response.status_code}")
+            except Exception as e:
+                st.error(f"🔴 خطأ مادي: {e}")
 else:
-    st.error("❌ المفتاح غير موجود في السكرت (Secrets)")
+    st.warning("⚠️ البينة ناقصة: الساروت (API Key) غير موجود في Secrets.")
