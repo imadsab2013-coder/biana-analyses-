@@ -1,30 +1,28 @@
 import streamlit as st
 import google.generativeai as genai
-from google.generativeai.types import RequestOptions
 
-st.title("🔬 مختبر البينة (المسار المستقر)")
+st.title("🔬 مختبر البينة (الربط المباشر)")
 
-# جلب المفتاح
+# 1. جلب المفتاح
 api_key = st.secrets.get("GOOGLE_API_KEY")
 
 if api_key:
     try:
-        # إعداد الإرسال ليكون مستقراً ومباشراً
+        # إعداد بسيط وقوي
         genai.configure(api_key=api_key)
         
-        # الحل القاطع: استخدام RequestOptions لإجبار السيرفر على v1
+        # استخدام اسم الموديل بدون أي إضافات (هذا المسار هو الأكثر استقراراً)
         model = genai.GenerativeModel('gemini-1.5-flash')
         
-        response = model.generate_content(
-            "سلام، هل المحرك شغال؟",
-            request_options=RequestOptions(api_version='v1') # إجبار النسخة V1
-        )
+        # محاولة توليد محتوى بسيط جداً
+        response = model.generate_content("سلام")
         
-        st.success("🟢 تم كسر الحصار! المحرك شغال")
-        st.write("الرد:", response.text)
+        st.success("🟢 اشتغل! البينة ظهرت")
+        st.write("رد الـ AI:", response.text)
         
     except Exception as e:
-        st.error(f"🔴 عطل تقني: {e}")
-        st.info("💡 إذا استمر الـ 404، جرب تبدل 'gemini-1.5-flash' بـ 'gemini-pro'")
+        # إذا استمر المشكل، سنغير "الموديل" نفسه داخل الكود
+        st.error(f"🔴 عطل مادي: {e}")
+        st.info("💡 جرب تبدل 'gemini-1.5-flash' بـ 'gemini-pro' في الكود إذا بقى الـ 404.")
 else:
-    st.error("❌ المفتاح مفقود في Secrets")
+    st.error("❌ المفتاح غير موجود في السكرت (Secrets)")
