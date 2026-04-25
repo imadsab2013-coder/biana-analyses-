@@ -2,66 +2,35 @@ import streamlit as st
 import google.generativeai as genai
 import os
 
-# إعداد الصفحة
-st.set_page_config(page_title="مختبر محلل البينة", layout="wide")
+st.set_page_config(page_title="مختبر البينة", layout="wide")
 
-# 1. تحميل النص المرجعي (quran.txt)
+# 1. تحميل النص المرجعي
 @st.cache_resource
 def load_data():
     if os.path.exists("quran.txt"):
         with open("quran.txt", "r", encoding="utf-8") as f:
             return f.read()
-    return "خطأ: ملف quran.txt غير موجود في المستودع."
+    return None
 
 full_text = load_data()
 
-# 2. القائمة الجانبية لإدارة المحركات
-st.sidebar.title("⚙️ غرفة التحكم")
+# 2. الإعدادات الجانبية
+st.sidebar.title("⚙️ الإعدادات المادية")
 
-# اختيار النسخة المطلوبة حصراً
-gemini_version = st.sidebar.selectbox(
-    "اختر النسخة للتجربة:", 
-    ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-exp"]
-)
+models_dict = {
+    "Gemini 1.5 Flash": "models/gemini-1.5-flash",
+    "Gemini 1.5 Pro": "models/gemini-1.5-pro",
+    "Gemini 2.0 Flash": "models/gemini-2.0-flash-exp"
+}
 
-# الربط بالمفتاح من Secrets مباشرة
+version_label = st.sidebar.selectbox("اختر النسخة:", list(models_dict.keys()))
+model_path = models_dict[version_label]
+
 api_key = st.secrets.get("GOOGLE_API_KEY")
 
+# --- نظام "البولة" (Connection Indicator) ---
+connection_status = False
 if api_key:
-    genai.configure(api_key=api_key)
     try:
-        # إعداد المحرك المختار
-        model = genai.GenerativeModel(model_name=gemini_version)
-    except Exception as e:
-        st.sidebar.error(f"خطأ في إعداد الموديل: {e}")
-else:
-    st.sidebar.warning("⚠️ لم يتم العثور على API KEY في Advanced Settings.")
-
-# 3. واجهة المختبر (بدون كلمة سر)
-st.title(f"🔬 مختبر التحليل المادي ({gemini_version})")
-
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-# عرض المحادثة
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
-
-# إدخال الطلبات
-if prompt := st.chat_input("أدخل تساؤلك للمختبر..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
-    
-    if api_key and full_text:
-        with st.chat_message("assistant"):
-            try:
-                # إرسال البيانات للمحرك
-                context_prompt = f"النص المرجعي:\n{full_text}\n\nالمهمة: {prompt}"
-                response = model.generate_content(context_prompt)
-                
-                st.markdown(response.text)
-                st.session_state.messages.append({"role": "assistant", "content": response.text})
-            except Exception as e:
-                st.error(f"بينة الفشل التقني: {e}")
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel(model_name
